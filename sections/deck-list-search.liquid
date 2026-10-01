@@ -4,7 +4,8 @@
 <div
   class="dls page-width section-{{ section.id }}-padding"
   data-dls
-  data-search-url="{{ routes.search_url }}"
+  data-catalog-url="{% if section.settings.collection != blank %}{{ section.settings.collection.url }}{% else %}{{ routes.all_products_collection_url }}{% endif %}"
+  data-products-url="{% if routes.root_url == '/' %}/products/{% else %}{{ routes.root_url }}/products/{% endif %}"
   data-cart-add-url="{{ routes.cart_add_url }}"
   data-cart-url="{{ routes.cart_url }}"
   data-currency="{{ cart.currency.iso_code }}"
@@ -29,7 +30,15 @@
       spellcheck="false"
       placeholder="4 Lightning Bolt&#10;4x Counterspell&#10;2 Fire // Ice (MH2) 290&#10;1 Urza's Saga"
     ></textarea>
-    <p class="dls__hint">Formats acceptés : Arena, MTGO, Moxfield, Archidekt… (« 4 Nom », « 4x Nom », « Nom x4 »).</p>
+    <p class="dls__hint">Noms en anglais ou en français. Formats acceptés : Arena, MTGO, Moxfield, Archidekt… (« 4 Nom », « 4x Nom », « Nom x4 »).</p>
+    <div class="dls__options">
+      <label for="dls-lang-{{ section.id }}">Langue préférée</label>
+      <select id="dls-lang-{{ section.id }}" class="dls__select" data-dls-lang>
+        <option value="">Peu importe (le moins cher)</option>
+        <option value="francais">Français</option>
+        <option value="anglais">Anglais</option>
+      </select>
+    </div>
     <div class="dls__actions">
       <button type="submit" class="button" data-dls-submit>{{ section.settings.button_label | escape }}</button>
       <button type="button" class="button button--secondary" data-dls-clear>Effacer</button>
@@ -65,6 +74,12 @@
       "default": "Rechercher"
     },
     {
+      "type": "collection",
+      "id": "collection",
+      "label": "Collection où chercher",
+      "info": "Laisser vide pour chercher dans tous les produits."
+    },
+    {
       "type": "checkbox",
       "id": "show_stock",
       "label": "Afficher la quantité en stock",
@@ -74,7 +89,7 @@
       "type": "checkbox",
       "id": "loose_match",
       "label": "Correspondance souple",
-      "info": "Accepte les produits dont le titre contient le nom de la carte (ex. « Lot Lightning Bolt FR »). Peut ramener des cartes au nom proche.",
+      "info": "Si une carte n'est pas trouvée par son nom exact, accepte les produits dont le titre contient ce nom. Peut ramener des cartes au nom proche.",
       "default": false
     }
   ],

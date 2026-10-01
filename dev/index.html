@@ -17,15 +17,23 @@
 </head>
 <body>
   <!-- Reproduit le rendu de sections/deck-list-search.liquid -->
-  <div class="dls page-width" data-dls data-search-url="/search" data-cart-add-url="/cart/add"
+  <div class="dls page-width" data-dls data-catalog-url="/collections/all" data-products-url="/products/" data-cart-add-url="/cart/add"
        data-cart-url="/cart" data-currency="EUR" data-locale="fr" data-loose="false" data-show-stock="true">
     <h1 class="dls__title">Recherche par liste</h1>
     <div class="dls__intro rte"><p>Colle ta liste de deck : on te montre toutes les cartes disponibles en boutique.</p></div>
     <form class="dls__form" data-dls-form novalidate>
       <label class="dls__label" for="dls-input">Ta liste de cartes (une par ligne)</label>
       <textarea id="dls-input" class="dls__textarea" data-dls-input rows="12" spellcheck="false"
-        placeholder="4 Lightning Bolt&#10;4x Counterspell"></textarea>
-      <p class="dls__hint">Formats acceptés : Arena, MTGO, Moxfield, Archidekt…</p>
+        placeholder="2 Chaos Warp&#10;1 Thalia's Lancers"></textarea>
+      <p class="dls__hint">Noms en anglais ou en français. Formats acceptés : Arena, MTGO, Moxfield, Archidekt…</p>
+      <div class="dls__options">
+        <label for="dls-lang">Langue préférée</label>
+        <select id="dls-lang" class="dls__select" data-dls-lang>
+          <option value="">Peu importe (le moins cher)</option>
+          <option value="francais">Français</option>
+          <option value="anglais">Anglais</option>
+        </select>
+      </div>
       <div class="dls__actions">
         <button type="submit" class="button" data-dls-submit>Rechercher</button>
         <button type="button" class="button button--secondary" data-dls-clear>Effacer</button>

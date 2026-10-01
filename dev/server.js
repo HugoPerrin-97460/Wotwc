@@ -1,45 +1,22 @@
-// Serveur de démo : sert la section avec un faux catalogue pour tester sans boutique.
+// Serveur de démo : sert la section avec un extrait du catalogue pour tester sans boutique.
 // Lancer : npm run dev  →  http://localhost:3000
 const http = require('node:http');
 const fs = require('node:fs');
 const path = require('node:path');
 
 const ROOT = path.join(__dirname, '..');
-const img = (n) => `https://placehold.co/160x223?text=${encodeURIComponent(n)}`;
-let nextId = 1;
-const product = (title, variants) => ({
-  id: nextId++,
-  title,
-  url: `/products/${title.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`,
-  image: img(title.split(' [')[0]),
-  variants: variants.map(([vt, price, qty]) => ({
-    id: nextId++, title: vt, price, available: qty === null || qty > 0, qty,
-  })),
-});
-
-const CATALOG = [
-  product('Lightning Bolt [M10]', [['Near Mint', 250, 3], ['Played', 150, 1]]),
-  product('Lightning Bolt [2X2] - Foil', [['Default Title', 900, 1]]),
-  product('Counterspell [MH2]', [['Default Title', 120, 2]]),
-  product('Fire // Ice [MH2]', [['Default Title', 80, 0]]),
-  product("Urza's Saga [MH2]", [['Default Title', 3200, null]]),
-  product('Shock Troops', [['Default Title', 20, 10]]),
-  product('Brainstorm [ICE]', [['Default Title', 100, 6]]),
-];
-
-const words = (s) => s.toLowerCase().replace(/[^a-z0-9 ]/g, ' ').split(/\s+/).filter(Boolean);
+// Extrait réel du catalogue de la boutique, servi par pages comme le ferait collection.deck.liquid.
+const CATALOG = require('../tests/fixtures/catalog.json');
+const PAGE_SIZE = 25;
 
 http.createServer((req, res) => {
   const url = new URL(req.url, 'http://localhost');
 
-  if (url.pathname === '/search' && url.searchParams.get('view') === 'deck') {
-    const q = words(url.searchParams.get('q') || '');
-    const products = CATALOG.filter((p) => {
-      const t = words(p.title);
-      return q.every((w) => t.some((tw) => tw.startsWith(w)));
-    });
+  if (url.pathname === '/collections/all' && url.searchParams.get('view') === 'deck') {
+    const page = Math.max(1, parseInt(url.searchParams.get('page'), 10) || 1);
+    const products = CATALOG.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
     res.writeHead(200, { 'Content-Type': 'text/html' });
-    return res.end(JSON.stringify({ products }));
+    return res.end(JSON.stringify({ pages: Math.ceil(CATALOG.length / PAGE_SIZE), products }));
   }
 
   if (url.pathname === '/cart/add.js' && req.method === 'POST') {

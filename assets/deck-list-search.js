@@ -1,29 +1,42 @@
 /*
  * Recherche par liste de cartes (Magic: The Gathering)
  *
- * Le client colle sa liste, chaque carte est cherchée dans la boutique via
- * la recherche Shopify (template alternatif `search.deck.liquid`, qui renvoie
- * du JSON), puis les résultats sont affichés avec prix, stock et un bouton
- * pour tout ajouter au panier.
+ * Le client colle sa liste. Le catalogue est chargé une fois via le template
+ * alternatif `collection.deck.liquid` (JSON), puis chaque carte est retrouvée :
+ *  - par son nom anglais, déduit du handle produit
+ *    (« chaos-warp-commander-marvel-super-heroes-extras-rare-359-893236 » → « chaos warp »),
+ *  - ou par le nom affiché dans le titre (« Distorsion chaotique - … » → « distorsion chaotique »).
+ * Les exemplaires dispo s'affichent avec prix et stock, et tout s'ajoute au panier en un clic.
  */
 (function () {
   'use strict';
 
   /* ---------- Lecture de la liste ---------- */
 
-  var HEADER_RE = /^(deck|main ?deck|mainboard|main|sideboard|side|commander|companion|maybeboard|considering|tokens?|lands?|creatures?|spells?|instants?|sorceries|artifacts?|enchantments?|planeswalkers?)\s*:?\s*(\(\d+\))?$/i;
+  var HEADER_RE = /^(deck|main ?deck|mainboard|main|sideboard|side|commander|companion|maybeboard|considering|tokens?|lands?|creatures?|spells?|instants?|sorceries|artifacts?|enchantments?|planeswalkers?|battles?)\s*:?\s*(\(\d+\))?$/i;
 
   function normalize(s) {
     return String(s)
       .normalize('NFD').replace(/[̀-ͯ]/g, '')
       .toLowerCase()
       .replace(/æ/g, 'ae')
+      .replace(/œ/g, 'oe')
       .replace(/['’‘`]/g, '')
       .replace(/[^a-z0-9]+/g, ' ')
       .trim();
   }
 
-  // "Fire // Ice" -> "Fire"
+  // Clé de comparaison sans espaces : « Thalia's Lancers » et « thalia-s-lancers » → « thaliaslancers »
+  function key(s) {
+    return normalize(s).replace(/ /g, '');
+  }
+
+  // « Commander: Marvel Super Heroes: Extras » → « commander-marvel-super-heroes-extras »
+  function slugify(s) {
+    return normalize(String(s).replace(/['’]/g, ' ')).replace(/ /g, '-');
+  }
+
+  // « Fire // Ice » → « Fire »
   function frontFace(name) {
     return String(name).split(/\s*\/{1,2}\s*/)[0].trim();
   }
@@ -59,43 +72,128 @@
     String(text).split(/\r?\n/).forEach(function (raw) {
       var card = parseLine(raw);
       if (!card) return;
-      var key = normalize(card.name);
-      if (byKey.has(key)) byKey.get(key).qty += card.qty;
-      else byKey.set(key, card);
+      var k = key(card.name);
+      if (byKey.has(k)) byKey.get(k).qty += card.qty;
+      else byKey.set(k, card);
     });
     return Array.from(byKey.values());
   }
 
-  /* ---------- Correspondance titre produit / nom de carte ---------- */
+  /* ---------- Noms d'un produit ---------- */
 
-  // "Lightning Bolt [M10] - Foil" -> "Lightning Bolt"
-  function cleanTitle(title) {
+  var RARITIES = ['common', 'uncommon', 'rare', 'mythic', 'special', 'bonus', 'land', 'basic-land', 'token', 'promo', 'time-shifted'];
+
+  // « Distorsion chaotique - Commander: … (Rare) [XMSC-359] » → « Distorsion chaotique »
+  function titleName(title) {
     return String(title)
       .replace(/\[[^\]]*\]|\([^)]*\)/g, ' ')
-      .split(/\s+[-–—|]\s+/)[0];
+      .split(/\s+[-–—|]\s+/)[0]
+      .trim();
   }
 
-  function titleMatches(title, name, loose) {
-    var t = cleanTitle(title);
-    if (normalize(t) === normalize(name)) return true;
-    if (normalize(frontFace(t)) === normalize(frontFace(name))) return true;
-    if (loose) {
-      var padded = ' ' + normalize(title) + ' ';
-      return padded.indexOf(' ' + normalize(frontFace(name)) + ' ') !== -1;
+  // handle = <nom anglais>[-v-N]-<extension>-<rareté>[-numéro][-id]
+  // L'extension et la rareté sont retrouvées grâce aux tags du produit.
+  function handleName(handle, tags) {
+    var h = String(handle);
+    var slugs = (tags || []).map(slugify);
+
+    var rarity = RARITIES.filter(function (r) { return slugs.indexOf(r) !== -1; })
+      .sort(function (a, b) { return b.length - a.length; })[0];
+    if (!rarity) return null;
+    var at = h.lastIndexOf('-' + rarity + '-');
+    if (at === -1 && h.slice(-rarity.length - 1) === '-' + rarity) at = h.length - rarity.length - 1;
+    if (at <= 0) return null;
+    h = h.slice(0, at);
+
+    // Tags d'extension tels quels, ou sans le suffixe « (Magic) » : « Promos (Magic) » → « promos »
+    var sets = [];
+    (tags || []).forEach(function (t) {
+      sets.push(slugify(t), slugify(String(t).replace(/\s*\([^)]*\)\s*$/, '')));
+    });
+    var set = sets
+      .filter(function (s) { return s && h.slice(-s.length - 1) === '-' + s; })
+      .sort(function (a, b) { return b.length - a.length; })[0];
+    if (!set) return null;
+    h = h.slice(0, -set.length - 1)
+      .replace(/-magic-the-gathering$/, '')
+      .replace(/-v-\d+$/, '');
+
+    return h || null;
+  }
+
+  function productKeys(p) {
+    var keys = new Set();
+    var t = titleName(p.t);
+    keys.add(key(t));
+    keys.add(key(frontFace(t)));
+    var en = handleName(p.h, p.g);
+    if (en) keys.add(key(en));
+    keys.delete('');
+    return keys;
+  }
+
+  function buildIndex(products) {
+    var index = new Map();
+    products.forEach(function (p) {
+      productKeys(p).forEach(function (k) {
+        if (!index.has(k)) index.set(k, []);
+        if (index.get(k).indexOf(p) === -1) index.get(k).push(p);
+      });
+    });
+    return index;
+  }
+
+  function findProducts(index, products, name, loose) {
+    var found = [];
+    function add(list) {
+      (list || []).forEach(function (p) { if (found.indexOf(p) === -1) found.push(p); });
     }
-    return false;
+    add(index.get(key(name)));
+    add(index.get(key(frontFace(name))));
+
+    if (loose && !found.length) {
+      var needle = ' ' + normalize(frontFace(name)) + ' ';
+      add(products.filter(function (p) {
+        var en = handleName(p.h, p.g);
+        return (' ' + normalize(p.t) + ' ').indexOf(needle) !== -1 ||
+          (en && (' ' + normalize(en) + ' ').indexOf(needle) !== -1);
+      }));
+    }
+    return found;
   }
 
-  // Répartit la quantité demandée sur les variantes dispo, la moins chère d'abord.
-  function allocate(variants, wanted) {
+  /* ---------- Répartition des quantités ---------- */
+
+  // « Français / Near Mint / Régulière » → « francais »
+  function variantLanguage(variantTitle) {
+    return normalize(String(variantTitle).split('/')[0]);
+  }
+
+  function variantOrder(lang) {
+    return function (a, b) {
+      if (lang) {
+        var pa = variantLanguage(a.t) === lang ? 0 : 1;
+        var pb = variantLanguage(b.t) === lang ? 0 : 1;
+        if (pa !== pb) return pa - pb;
+      }
+      return a.p - b.p;
+    };
+  }
+
+  // Répartit la quantité demandée sur les variantes dispo :
+  // langue préférée d'abord, puis la moins chère.
+  // `used` (facultatif) garde le stock déjà pris par les lignes précédentes de la liste,
+  // pour ne pas réserver deux fois le même exemplaire (ex. « Thriving Moor » + « Lande prospère »).
+  function allocate(variants, wanted, lang, used) {
     var remaining = wanted;
-    var sorted = variants.slice().sort(function (a, b) { return a.price - b.price; });
     var picks = new Map();
-    sorted.forEach(function (v) {
-      if (!v.available || remaining <= 0) return;
-      var take = v.qty == null ? remaining : Math.min(remaining, Math.max(v.qty, 0));
+    variants.slice().sort(variantOrder(lang)).forEach(function (v) {
+      if (!v.a || remaining <= 0 || picks.has(v.id)) return;
+      var already = used ? used.get(v.id) || 0 : 0;
+      var take = v.q == null ? remaining : Math.min(remaining, Math.max(v.q - already, 0));
       if (take > 0) {
         picks.set(v.id, take);
+        if (used) used.set(v.id, already + take);
         remaining -= take;
       }
     });
@@ -104,11 +202,16 @@
 
   var core = {
     normalize: normalize,
+    key: key,
+    slugify: slugify,
     frontFace: frontFace,
     parseLine: parseLine,
     parseDeckList: parseDeckList,
-    cleanTitle: cleanTitle,
-    titleMatches: titleMatches,
+    titleName: titleName,
+    handleName: handleName,
+    buildIndex: buildIndex,
+    findProducts: findProducts,
+    variantLanguage: variantLanguage,
     allocate: allocate
   };
 
@@ -119,7 +222,8 @@
 
   /* ---------- Interface ---------- */
 
-  var STORAGE_KEY = 'deck-list-search:last';
+  var LIST_KEY = 'deck-list-search:last';
+  var CACHE_TTL = 10 * 60 * 1000;
   var CONCURRENCY = 4;
 
   function esc(s) {
@@ -128,42 +232,37 @@
     });
   }
 
-  function pool(items, limit, worker) {
-    var i = 0;
-    var results = new Array(items.length);
-    function next() {
-      if (i >= items.length) return Promise.resolve();
-      var idx = i++;
-      return worker(items[idx], idx).then(function (r) {
-        results[idx] = r;
-        return next();
-      });
-    }
-    var runners = [];
-    for (var k = 0; k < Math.min(limit, items.length); k++) runners.push(next());
-    return Promise.all(runners).then(function () { return results; });
+  function store(kind, k, value) {
+    try {
+      var s = window[kind];
+      if (value === undefined) return s.getItem(k);
+      if (value === null) s.removeItem(k);
+      else s.setItem(k, value);
+    } catch (e) { /* stockage indisponible ou plein */ }
+    return null;
   }
 
   function DeckListSearch(root) {
     this.root = root;
     this.form = root.querySelector('[data-dls-form]');
     this.textarea = root.querySelector('[data-dls-input]');
+    this.langSelect = root.querySelector('[data-dls-lang]');
     this.status = root.querySelector('[data-dls-status]');
     this.results = root.querySelector('[data-dls-results]');
     this.submitBtn = root.querySelector('[data-dls-submit]');
 
     var d = root.dataset;
-    this.searchUrl = d.searchUrl || '/search';
+    this.catalogUrl = d.catalogUrl || '/collections/all';
+    this.productsUrl = d.productsUrl || '/products/';
     this.cartAddUrl = (d.cartAddUrl || '/cart/add') + '.js';
     this.cartUrl = d.cartUrl || '/cart';
     this.loose = d.loose === 'true';
     this.showStock = d.showStock !== 'false';
     this.money = new Intl.NumberFormat(d.locale || 'fr', { style: 'currency', currency: d.currency || 'EUR' });
+    this.catalog = null;
 
-    try {
-      var saved = window.localStorage.getItem(STORAGE_KEY);
-      if (saved && !this.textarea.value) this.textarea.value = saved;
-    } catch (e) { /* stockage indisponible */ }
+    var saved = store('localStorage', LIST_KEY);
+    if (saved && !this.textarea.value) this.textarea.value = saved;
 
     this.form.addEventListener('submit', this.onSubmit.bind(this));
     root.querySelector('[data-dls-clear]').addEventListener('click', this.onClear.bind(this));
@@ -181,33 +280,73 @@
     this.results.hidden = true;
     this.results.innerHTML = '';
     this.setStatus('');
-    try { window.localStorage.removeItem(STORAGE_KEY); } catch (e) { /* ignore */ }
+    store('localStorage', LIST_KEY, null);
     this.textarea.focus();
   };
 
-  DeckListSearch.prototype.search = function (name) {
-    var params = new URLSearchParams({
-      q: frontFace(name),
-      type: 'product',
-      view: 'deck',
-      'options[prefix]': 'last',
-      'options[unavailable_products]': 'last'
-    });
-    return fetch(this.searchUrl + '?' + params.toString(), {
-      credentials: 'same-origin',
-      headers: { Accept: 'application/json' }
-    })
+  DeckListSearch.prototype.fetchPage = function (page) {
+    var url = this.catalogUrl + '?view=deck&page=' + page;
+    return fetch(url, { credentials: 'same-origin' })
       .then(function (r) {
         if (!r.ok) throw new Error('HTTP ' + r.status);
         return r.text();
       })
       .then(function (text) {
         try {
-          return JSON.parse(text).products || [];
+          return JSON.parse(text);
         } catch (e) {
           throw new Error('template');
         }
       });
+  };
+
+  // Charge tout le catalogue (pages de 250 produits), avec cache de 10 min dans la session.
+  DeckListSearch.prototype.loadCatalog = function () {
+    var self = this;
+    if (this.catalog) return Promise.resolve(this.catalog);
+
+    var cacheKey = 'deck-list-search:catalog:' + this.catalogUrl;
+    var cached = store('sessionStorage', cacheKey);
+    if (cached) {
+      try {
+        var c = JSON.parse(cached);
+        if (Date.now() - c.at < CACHE_TTL) return Promise.resolve(this.setCatalog(c.products));
+      } catch (e) { /* cache illisible */ }
+    }
+
+    this.setStatus('Chargement du catalogue…');
+    return this.fetchPage(1).then(function (first) {
+      var pages = Math.max(1, first.pages || 1);
+      var all = [first.products];
+      var todo = [];
+      for (var p = 2; p <= pages; p++) todo.push(p);
+      var loaded = 1;
+
+      var i = 0;
+      function next() {
+        if (i >= todo.length) return Promise.resolve();
+        var page = todo[i++];
+        return self.fetchPage(page).then(function (res) {
+          all[page - 1] = res.products;
+          loaded++;
+          self.setStatus('Chargement du catalogue… ' + loaded + ' / ' + pages);
+          return next();
+        });
+      }
+      var runners = [];
+      for (var k = 0; k < Math.min(CONCURRENCY, todo.length); k++) runners.push(next());
+
+      return Promise.all(runners).then(function () {
+        var products = [].concat.apply([], all);
+        store('sessionStorage', cacheKey, JSON.stringify({ at: Date.now(), products: products }));
+        return self.setCatalog(products);
+      });
+    });
+  };
+
+  DeckListSearch.prototype.setCatalog = function (products) {
+    this.catalog = { products: products, index: buildIndex(products) };
+    return this.catalog;
   };
 
   DeckListSearch.prototype.onSubmit = function (event) {
@@ -218,72 +357,62 @@
       this.setStatus('Colle ta liste de cartes, une carte par ligne.', true);
       return;
     }
-    try { window.localStorage.setItem(STORAGE_KEY, this.textarea.value); } catch (e) { /* ignore */ }
+    store('localStorage', LIST_KEY, this.textarea.value);
 
     this.submitBtn.disabled = true;
-    var done = 0;
-    this.setStatus('Recherche de ' + cards.length + ' cartes…');
-
-    pool(cards, CONCURRENCY, function (card) {
-      return self.search(card.name)
-        .then(function (products) {
-          var matched = products.filter(function (p) { return titleMatches(p.title, card.name, self.loose); });
-          return { card: card, products: matched };
-        })
-        .catch(function (err) {
-          return { card: card, products: [], error: err.message };
-        })
-        .then(function (res) {
-          done++;
-          self.setStatus('Recherche… ' + done + ' / ' + cards.length);
-          return res;
+    this.loadCatalog()
+      .then(function (catalog) {
+        var results = cards.map(function (card) {
+          return { card: card, products: findProducts(catalog.index, catalog.products, card.name, self.loose) };
         });
-    }).then(function (results) {
-      self.submitBtn.disabled = false;
-      if (results.some(function (r) { return r.error === 'template'; })) {
-        self.setStatus('Le template « search.deck » est absent du thème : la recherche ne peut pas fonctionner.', true);
-        return;
-      }
-      self.render(results);
-    });
+        self.render(results);
+      })
+      .catch(function (err) {
+        self.setStatus(err.message === 'template'
+          ? 'Le template « collection.deck » est absent du thème : la recherche ne peut pas fonctionner.'
+          : 'Impossible de charger le catalogue (' + err.message + '). Réessaie dans un instant.', true);
+      })
+      .then(function () { self.submitBtn.disabled = false; });
   };
 
   DeckListSearch.prototype.variantLabel = function (product, variant) {
-    var label = product.title;
-    if (variant.title && variant.title !== 'Default Title') label += ' — ' + variant.title;
+    var label = product.t;
+    if (variant.t && variant.t !== 'Default Title') label += ' — ' + variant.t;
     return label;
   };
 
   DeckListSearch.prototype.stockLabel = function (variant) {
-    if (!variant.available) return 'Épuisé';
-    if (this.showStock && variant.qty != null) return variant.qty + ' en stock';
+    if (!variant.a) return 'Épuisé';
+    if (this.showStock && variant.q != null) return variant.q + ' en stock';
     return 'Disponible';
   };
 
   DeckListSearch.prototype.render = function (results) {
     var self = this;
+    var lang = this.langSelect ? this.langSelect.value : '';
+    var byLangAndPrice = variantOrder(lang);
+    var order = function (a, b) {
+      return (b.variant.a - a.variant.a) || byLangAndPrice(a.variant, b.variant);
+    };
+
     var found = [];
     var missing = [];
+    var used = new Map();
 
     results.forEach(function (r) {
-      var variants = [];
+      var rows = [];
       r.products.forEach(function (p) {
-        p.variants.forEach(function (v) { variants.push({ product: p, variant: v }); });
+        p.v.forEach(function (v) { rows.push({ product: p, variant: v }); });
       });
-      var picks = allocate(variants.map(function (x) { return x.variant; }), r.card.qty);
+      var picks = allocate(rows.map(function (x) { return x.variant; }), r.card.qty, lang, used);
       var have = 0;
       picks.forEach(function (n) { have += n; });
 
-      if (!variants.some(function (x) { return x.variant.available; })) {
-        missing.push(r);
-      } else {
-        found.push({ card: r.card, variants: variants, picks: picks, have: have });
-      }
+      if (!rows.some(function (x) { return x.variant.a; })) missing.push(r);
+      else found.push({ card: r.card, rows: rows.sort(order), picks: picks, have: have });
     });
 
-    var html = '';
-
-    html += '<div class="dls__summary">' +
+    var html = '<div class="dls__summary">' +
       '<p class="dls__summary-text" data-dls-summary></p>' +
       '<button type="button" class="button" data-dls-add>Ajouter au panier</button>' +
       '</div>' +
@@ -299,31 +428,27 @@
           '<span class="dls__badge">' + (state === 'ok' ? 'Complet' : f.have + ' / ' + f.card.qty) + '</span>' +
           '</div><ul class="dls__variants">';
 
-        f.variants
-          .slice()
-          .sort(function (a, b) {
-            return (b.variant.available - a.variant.available) || (a.variant.price - b.variant.price);
-          })
-          .forEach(function (x) {
-            var v = x.variant;
-            var p = x.product;
-            var max = v.qty != null && v.qty >= 0 ? ' max="' + v.qty + '"' : '';
-            var img = p.image
-              ? '<img src="' + esc(p.image) + '" alt="" width="48" height="67" loading="lazy">'
-              : '<span class="dls__noimg"></span>';
-            html += '<li class="dls__variant' + (v.available ? '' : ' dls__variant--soldout') + '">' +
-              img +
-              '<a class="dls__variant-title" href="' + esc(p.url) + '?variant=' + esc(v.id) + '" target="_blank" rel="noopener">' +
-              esc(self.variantLabel(p, v)) + '</a>' +
-              '<span class="dls__price">' + esc(self.money.format(v.price / 100)) + '</span>' +
-              '<span class="dls__stock">' + esc(self.stockLabel(v)) + '</span>' +
-              (v.available
-                ? '<input class="dls__qty" type="number" inputmode="numeric" min="0"' + max +
-                  ' value="' + (f.picks.get(v.id) || 0) + '" data-variant-id="' + esc(v.id) +
-                  '" data-price="' + esc(v.price) + '" aria-label="Quantité pour ' + esc(self.variantLabel(p, v)) + '">'
-                : '<span class="dls__qty dls__qty--none">—</span>') +
-              '</li>';
-          });
+        f.rows.forEach(function (x) {
+          var v = x.variant;
+          var p = x.product;
+          var label = self.variantLabel(p, v);
+          var max = v.q != null && v.q >= 0 ? ' max="' + v.q + '"' : '';
+          var img = p.i
+            ? '<img src="' + esc(p.i) + '" alt="" width="48" height="67" loading="lazy">'
+            : '<span class="dls__noimg"></span>';
+          html += '<li class="dls__variant' + (v.a ? '' : ' dls__variant--soldout') + '">' +
+            img +
+            '<a class="dls__variant-title" href="' + esc(self.productsUrl + p.h) + '?variant=' + esc(v.id) +
+            '" target="_blank" rel="noopener">' + esc(label) + '</a>' +
+            '<span class="dls__price">' + esc(self.money.format(v.p / 100)) + '</span>' +
+            '<span class="dls__stock">' + esc(self.stockLabel(v)) + '</span>' +
+            (v.a
+              ? '<input class="dls__qty" type="number" inputmode="numeric" min="0"' + max +
+                ' value="' + (f.picks.get(v.id) || 0) + '" data-variant-id="' + esc(v.id) +
+                '" data-price="' + esc(v.p) + '" aria-label="Quantité pour ' + esc(label) + '">'
+              : '<span class="dls__qty dls__qty--none">—</span>') +
+            '</li>';
+        });
 
         html += '</ul></li>';
       });
@@ -334,10 +459,7 @@
       var missingText = missing.map(function (r) { return r.card.qty + ' ' + r.card.name; }).join('\n');
       html += '<h3 class="dls__heading">Introuvables ou épuisées (' + missing.length + ')</h3>' +
         '<ul class="dls__missing">' +
-        missing.map(function (r) {
-          return '<li>' + esc(r.card.qty) + ' × ' + esc(r.card.name) +
-            (r.error ? ' <small>(erreur de recherche)</small>' : '') + '</li>';
-        }).join('') +
+        missing.map(function (r) { return '<li>' + esc(r.card.qty) + ' × ' + esc(r.card.name) + '</li>'; }).join('') +
         '</ul>' +
         '<button type="button" class="button button--secondary" data-dls-copy="' + esc(missingText) + '">Copier la liste des cartes manquantes</button>';
     }
@@ -360,10 +482,9 @@
   DeckListSearch.prototype.updateSummary = function () {
     var summary = this.results.querySelector('[data-dls-summary]');
     if (!summary) return;
-    var items = this.selection();
     var count = 0;
     var total = 0;
-    items.forEach(function (i) { count += i.quantity; total += i.quantity * i.price; });
+    this.selection().forEach(function (i) { count += i.quantity; total += i.quantity * i.price; });
     summary.textContent = count + (count > 1 ? ' cartes sélectionnées' : ' carte sélectionnée') +
       ' · Total : ' + this.money.format(total / 100);
     this.results.querySelector('[data-dls-add]').disabled = count === 0;

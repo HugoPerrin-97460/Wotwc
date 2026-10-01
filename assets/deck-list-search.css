@@ -29,6 +29,15 @@
   box-sizing: border-box;
 }
 .dls__hint { margin: 0; font-size: 1.3rem; color: var(--dls-muted); }
+.dls__options { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem 1rem; }
+.dls__select {
+  padding: 0.6rem 1rem;
+  font: inherit;
+  border: 1px solid var(--dls-border);
+  border-radius: 0.4rem;
+  background: transparent;
+  color: inherit;
+}
 .dls__actions { display: flex; flex-wrap: wrap; gap: 1rem; }
 
 .dls__status { min-height: 1.5em; margin: 1.5rem 0; }
