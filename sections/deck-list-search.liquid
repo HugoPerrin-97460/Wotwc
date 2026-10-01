@@ -1,0 +1,87 @@
+{{ 'deck-list-search.css' | asset_url | stylesheet_tag }}
+<script src="{{ 'deck-list-search.js' | asset_url }}" defer></script>
+
+<div
+  class="dls page-width section-{{ section.id }}-padding"
+  data-dls
+  data-search-url="{{ routes.search_url }}"
+  data-cart-add-url="{{ routes.cart_add_url }}"
+  data-cart-url="{{ routes.cart_url }}"
+  data-currency="{{ cart.currency.iso_code }}"
+  data-locale="{{ request.locale.iso_code }}"
+  data-loose="{{ section.settings.loose_match }}"
+  data-show-stock="{{ section.settings.show_stock }}"
+>
+  {%- if section.settings.heading != blank -%}
+    <h1 class="dls__title">{{ section.settings.heading | escape }}</h1>
+  {%- endif -%}
+  {%- if section.settings.intro != blank -%}
+    <div class="dls__intro rte">{{ section.settings.intro }}</div>
+  {%- endif -%}
+
+  <form class="dls__form" data-dls-form novalidate>
+    <label class="dls__label" for="dls-input-{{ section.id }}">Ta liste de cartes (une par ligne)</label>
+    <textarea
+      id="dls-input-{{ section.id }}"
+      class="dls__textarea"
+      data-dls-input
+      rows="12"
+      spellcheck="false"
+      placeholder="4 Lightning Bolt&#10;4x Counterspell&#10;2 Fire // Ice (MH2) 290&#10;1 Urza's Saga"
+    ></textarea>
+    <p class="dls__hint">Formats acceptés : Arena, MTGO, Moxfield, Archidekt… (« 4 Nom », « 4x Nom », « Nom x4 »).</p>
+    <div class="dls__actions">
+      <button type="submit" class="button" data-dls-submit>{{ section.settings.button_label | escape }}</button>
+      <button type="button" class="button button--secondary" data-dls-clear>Effacer</button>
+    </div>
+  </form>
+
+  <p class="dls__status" data-dls-status role="status" aria-live="polite"></p>
+  <div class="dls__results" data-dls-results hidden></div>
+</div>
+
+{% schema %}
+{
+  "name": "Recherche par liste",
+  "tag": "section",
+  "class": "section",
+  "settings": [
+    {
+      "type": "text",
+      "id": "heading",
+      "label": "Titre",
+      "default": "Recherche par liste"
+    },
+    {
+      "type": "richtext",
+      "id": "intro",
+      "label": "Texte d'introduction",
+      "default": "<p>Colle ta liste de deck : on te montre toutes les cartes disponibles en boutique et tu peux tout ajouter au panier en un clic.</p>"
+    },
+    {
+      "type": "text",
+      "id": "button_label",
+      "label": "Texte du bouton",
+      "default": "Rechercher"
+    },
+    {
+      "type": "checkbox",
+      "id": "show_stock",
+      "label": "Afficher la quantité en stock",
+      "default": true
+    },
+    {
+      "type": "checkbox",
+      "id": "loose_match",
+      "label": "Correspondance souple",
+      "info": "Accepte les produits dont le titre contient le nom de la carte (ex. « Lot Lightning Bolt FR »). Peut ramener des cartes au nom proche.",
+      "default": false
+    }
+  ],
+  "presets": [
+    {
+      "name": "Recherche par liste"
+    }
+  ]
+}
+{% endschema %}

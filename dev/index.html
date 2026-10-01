@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Recherche par liste (démo)</title>
+  <style>
+    html { font-size: 62.5%; }
+    body { margin: 0; font: 1.6rem/1.5 system-ui, sans-serif; color: #121212; background: #fff; }
+    .page-width { max-width: 120rem; margin: 0 auto; padding: 0 1.5rem; }
+    .button { padding: 1rem 2rem; font: inherit; border: 1px solid #121212; background: #121212; color: #fff; cursor: pointer; border-radius: 0.4rem; }
+    .button--secondary { background: #fff; color: #121212; }
+    .button:disabled { opacity: 0.5; cursor: default; }
+  </style>
+  <link rel="stylesheet" href="/assets/deck-list-search.css">
+  <script src="/assets/deck-list-search.js" defer></script>
+</head>
+<body>
+  <!-- Reproduit le rendu de sections/deck-list-search.liquid -->
+  <div class="dls page-width" data-dls data-search-url="/search" data-cart-add-url="/cart/add"
+       data-cart-url="/cart" data-currency="EUR" data-locale="fr" data-loose="false" data-show-stock="true">
+    <h1 class="dls__title">Recherche par liste</h1>
+    <div class="dls__intro rte"><p>Colle ta liste de deck : on te montre toutes les cartes disponibles en boutique.</p></div>
+    <form class="dls__form" data-dls-form novalidate>
+      <label class="dls__label" for="dls-input">Ta liste de cartes (une par ligne)</label>
+      <textarea id="dls-input" class="dls__textarea" data-dls-input rows="12" spellcheck="false"
+        placeholder="4 Lightning Bolt&#10;4x Counterspell"></textarea>
+      <p class="dls__hint">Formats acceptés : Arena, MTGO, Moxfield, Archidekt…</p>
+      <div class="dls__actions">
+        <button type="submit" class="button" data-dls-submit>Rechercher</button>
+        <button type="button" class="button button--secondary" data-dls-clear>Effacer</button>
+      </div>
+    </form>
+    <p class="dls__status" data-dls-status role="status" aria-live="polite"></p>
+    <div class="dls__results" data-dls-results hidden></div>
+  </div>
+</body>
+</html>
