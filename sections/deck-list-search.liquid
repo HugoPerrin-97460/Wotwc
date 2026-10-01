@@ -1,59 +1,91 @@
-{{ 'deck-list-search.css' | asset_url | stylesheet_tag }}
-<script src="{{ 'deck-list-search.js' | asset_url }}" defer></script>
+{%- liquid
+  assign show = true
+  if section.settings.only_on != blank and template.name == 'collection'
+    if collection.handle != section.settings.only_on.handle
+      assign show = false
+    endif
+  endif
 
-<div
-  class="dls page-width section-{{ section.id }}-padding"
-  data-dls
-  data-catalog-url="{% if section.settings.collection != blank %}{{ section.settings.collection.url }}{% else %}{{ routes.all_products_collection_url }}{% endif %}"
-  data-products-url="{% if routes.root_url == '/' %}/products/{% else %}{{ routes.root_url }}/products/{% endif %}"
-  data-cart-add-url="{{ routes.cart_add_url }}"
-  data-cart-url="{{ routes.cart_url }}"
-  data-currency="{{ cart.currency.iso_code }}"
-  data-locale="{{ request.locale.iso_code }}"
-  data-loose="{{ section.settings.loose_match }}"
-  data-show-stock="{{ section.settings.show_stock }}"
->
-  {%- if section.settings.heading != blank -%}
-    <h1 class="dls__title">{{ section.settings.heading | escape }}</h1>
-  {%- endif -%}
-  {%- if section.settings.intro != blank -%}
-    <div class="dls__intro rte">{{ section.settings.intro }}</div>
-  {%- endif -%}
+  if section.settings.collection != blank
+    assign catalog_url = section.settings.collection.url
+  elsif template.name == 'collection' and collection
+    assign catalog_url = collection.url
+  else
+    assign catalog_url = routes.all_products_collection_url
+  endif
 
-  <form class="dls__form" data-dls-form novalidate>
-    <label class="dls__label" for="dls-input-{{ section.id }}">Ta liste de cartes (une par ligne)</label>
-    <textarea
-      id="dls-input-{{ section.id }}"
-      class="dls__textarea"
-      data-dls-input
-      rows="12"
-      spellcheck="false"
-      placeholder="4 Lightning Bolt&#10;4x Counterspell&#10;2 Fire // Ice (MH2) 290&#10;1 Urza's Saga"
-    ></textarea>
-    <p class="dls__hint">Noms en anglais ou en français. Formats acceptés : Arena, MTGO, Moxfield, Archidekt… (« 4 Nom », « 4x Nom », « Nom x4 »).</p>
-    <div class="dls__options">
-      <label for="dls-lang-{{ section.id }}">Langue préférée</label>
-      <select id="dls-lang-{{ section.id }}" class="dls__select" data-dls-lang>
-        <option value="">Peu importe (le moins cher)</option>
-        <option value="francais">Français</option>
-        <option value="anglais">Anglais</option>
-      </select>
+  if routes.root_url == '/'
+    assign products_url = '/products/'
+  else
+    assign products_url = routes.root_url | append: '/products/'
+  endif
+-%}
+
+{%- if show -%}
+  {{ 'deck-list-search.css' | asset_url | stylesheet_tag }}
+  <script src="{{ 'deck-list-search.js' | asset_url }}" defer></script>
+
+  <div
+    class="section section--page-width"
+    style="padding-block: {{ section.settings.padding_top }}px {{ section.settings.padding_bottom }}px;"
+  >
+    <div
+      class="dls"
+      data-dls
+      data-catalog-url="{{ catalog_url }}"
+      data-products-url="{{ products_url }}"
+      data-cart-add-url="{{ routes.cart_add_url }}"
+      data-cart-url="{{ routes.cart_url }}"
+      data-currency="{{ cart.currency.iso_code }}"
+      data-locale="{{ request.locale.iso_code }}"
+      data-loose="{{ section.settings.loose_match }}"
+      data-show-stock="{{ section.settings.show_stock }}"
+    >
+      <details class="dls__panel"{% if section.settings.open_by_default %} open{% endif %}>
+        <summary class="dls__panel-summary">
+          <span class="dls__title h4">{{ section.settings.heading | escape }}</span>
+          {%- if section.settings.intro != blank -%}
+            <span class="dls__intro">{{ section.settings.intro }}</span>
+          {%- endif -%}
+        </summary>
+
+        <form class="dls__form" data-dls-form novalidate>
+          <label class="dls__label" for="dls-input-{{ section.id }}">Ta liste de cartes (une par ligne)</label>
+          <textarea
+            id="dls-input-{{ section.id }}"
+            class="dls__textarea"
+            data-dls-input
+            rows="8"
+            spellcheck="false"
+            placeholder="4 Lightning Bolt&#10;2x Chaos Warp&#10;1 Distorsion chaotique&#10;1 Fire // Ice (MH2) 290"
+          ></textarea>
+          <p class="dls__hint">Noms en anglais ou en français. Formats acceptés : Arena, MTGO, Moxfield, Archidekt… (« 4 Nom », « 4x Nom », « Nom x4 »).</p>
+          <div class="dls__options">
+            <label for="dls-lang-{{ section.id }}">Langue préférée</label>
+            <select id="dls-lang-{{ section.id }}" class="dls__select" data-dls-lang>
+              <option value="">Peu importe (le moins cher)</option>
+              <option value="francais">Français</option>
+              <option value="anglais">Anglais</option>
+            </select>
+          </div>
+          <div class="dls__actions">
+            <button type="submit" class="button" data-dls-submit>{{ section.settings.button_label | escape }}</button>
+            <button type="button" class="button-secondary" data-dls-clear>Effacer</button>
+          </div>
+        </form>
+
+        <p class="dls__status" data-dls-status role="status" aria-live="polite"></p>
+        <div class="dls__results" data-dls-results hidden></div>
+      </details>
     </div>
-    <div class="dls__actions">
-      <button type="submit" class="button" data-dls-submit>{{ section.settings.button_label | escape }}</button>
-      <button type="button" class="button button--secondary" data-dls-clear>Effacer</button>
-    </div>
-  </form>
-
-  <p class="dls__status" data-dls-status role="status" aria-live="polite"></p>
-  <div class="dls__results" data-dls-results hidden></div>
-</div>
+  </div>
+{%- endif -%}
 
 {% schema %}
 {
   "name": "Recherche par liste",
   "tag": "section",
-  "class": "section",
+  "class": "section-wrapper",
   "settings": [
     {
       "type": "text",
@@ -62,10 +94,10 @@
       "default": "Recherche par liste"
     },
     {
-      "type": "richtext",
+      "type": "inline_richtext",
       "id": "intro",
       "label": "Texte d'introduction",
-      "default": "<p>Colle ta liste de deck : on te montre toutes les cartes disponibles en boutique et tu peux tout ajouter au panier en un clic.</p>"
+      "default": "Colle ta liste de deck : on te montre les cartes disponibles et tu peux tout ajouter au panier en un clic."
     },
     {
       "type": "text",
@@ -74,10 +106,22 @@
       "default": "Rechercher"
     },
     {
+      "type": "checkbox",
+      "id": "open_by_default",
+      "label": "Ouvert par défaut",
+      "default": true
+    },
+    {
+      "type": "collection",
+      "id": "only_on",
+      "label": "N'afficher que sur cette collection",
+      "info": "Sur un modèle de collection partagé, la section n'apparaît que sur cette collection. Laisser vide pour l'afficher partout."
+    },
+    {
       "type": "collection",
       "id": "collection",
       "label": "Collection où chercher",
-      "info": "Laisser vide pour chercher dans tous les produits."
+      "info": "Laisser vide pour chercher dans la collection affichée (ou dans tous les produits hors page collection)."
     },
     {
       "type": "checkbox",
@@ -91,6 +135,26 @@
       "label": "Correspondance souple",
       "info": "Si une carte n'est pas trouvée par son nom exact, accepte les produits dont le titre contient ce nom. Peut ramener des cartes au nom proche.",
       "default": false
+    },
+    {
+      "type": "range",
+      "id": "padding_top",
+      "label": "Marge haute",
+      "min": 0,
+      "max": 100,
+      "step": 4,
+      "unit": "px",
+      "default": 0
+    },
+    {
+      "type": "range",
+      "id": "padding_bottom",
+      "label": "Marge basse",
+      "min": 0,
+      "max": 100,
+      "step": 4,
+      "unit": "px",
+      "default": 32
     }
   ],
   "presets": [

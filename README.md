@@ -33,19 +33,26 @@ puis gardé 10 minutes dans le navigateur : les recherches suivantes sont instan
 | `assets/deck-list-search.js` | Lecture de la liste, recherche, affichage, ajout au panier |
 | `assets/deck-list-search.css` | Styles |
 | `templates/collection.deck.liquid` | Vue JSON du catalogue utilisée par le script (**obligatoire**) |
-| `templates/page.deck-list.json` | Modèle de page qui contient la section |
+| `templates/page.deck-list.json` | Modèle de page autonome (optionnel) |
+| `templates/collection.json` | Modèle de collection Horizon avec la section, affichée seulement sur « Cartes à l'unité » (`magic-single`) |
 
 ### Installation sur la boutique
 
-1. **Boutique en ligne → Thèmes → … → Modifier le code** (faire d'abord une copie du thème).
-2. Créer chaque fichier ci-dessus dans le dossier correspondant et coller son contenu.
-3. **Boutique en ligne → Pages → Ajouter une page** : titre « Recherche par liste »,
-   puis à droite **Modèle → `deck-list`**. Enregistrer.
-4. Ajouter la page au menu (**Boutique en ligne → Navigation**).
+La section est installée sur la copie de thème **« Horizon – Recherche par liste »** (non publiée),
+dans le modèle de collection, entre le titre et la grille de produits. Elle n'apparaît que sur
+la collection « Cartes à l'unité » (`magic-single`, réglage « N'afficher que sur cette collection »)
+et cherche dans cette même collection.
 
-Réglages dans l'éditeur de thème : titre, texte d'intro, collection où chercher (toutes
-les cartes par défaut), affichage du stock, et « Correspondance souple » (si une carte
-n'est pas trouvée par son nom exact, accepte les titres qui contiennent ce nom).
+- Aperçu : `https://wizardsofthewestcoast.com/collections/magic-single?preview_theme_id=189146628415`
+- Pour la mettre en ligne : **Boutique en ligne → Thèmes → « Horizon – Recherche par liste » → Publier**.
+
+Le panier passe par les actions standard Shopify du thème Horizon (`Shopify.actions.updateCart`) :
+la pastille et le tiroir du panier se mettent à jour automatiquement. Sur un autre thème, le
+script se replie sur `/cart/add.js`.
+
+Pour l'installer à la main sur un autre thème : copier `sections/`, `assets/` et
+`templates/collection.deck.liquid`, puis ajouter la section « Recherche par liste » au modèle
+voulu depuis l'éditeur de thème.
 
 ### Développement
 

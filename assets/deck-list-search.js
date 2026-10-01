@@ -412,11 +412,14 @@
       else found.push({ card: r.card, rows: rows.sort(order), picks: picks, have: have });
     });
 
-    var html = '<div class="dls__summary">' +
-      '<p class="dls__summary-text" data-dls-summary></p>' +
-      '<button type="button" class="button" data-dls-add>Ajouter au panier</button>' +
-      '</div>' +
-      '<p class="dls__cart-msg" data-dls-cart-msg role="status" aria-live="polite"></p>';
+    var summaryBar = function (extraClass) {
+      return '<div class="dls__summary' + extraClass + '">' +
+        '<p class="dls__summary-text" data-dls-summary></p>' +
+        '<button type="button" class="button" data-dls-add>Ajouter au panier</button>' +
+        '</div>' +
+        '<p class="dls__cart-msg" data-dls-cart-msg role="status" aria-live="polite"></p>';
+    };
+    var html = summaryBar('');
 
     if (found.length) {
       html += '<h3 class="dls__heading">Disponibles (' + found.length + ')</h3><ul class="dls__cards">';
@@ -461,8 +464,10 @@
         '<ul class="dls__missing">' +
         missing.map(function (r) { return '<li>' + esc(r.card.qty) + ' × ' + esc(r.card.name) + '</li>'; }).join('') +
         '</ul>' +
-        '<button type="button" class="button button--secondary" data-dls-copy="' + esc(missingText) + '">Copier la liste des cartes manquantes</button>';
+        '<button type="button" class="button-secondary" data-dls-copy="' + esc(missingText) + '">Copier la liste des cartes manquantes</button>';
     }
+
+    if (found.length) html += summaryBar(' dls__summary--bottom');
 
     this.results.innerHTML = html;
     this.results.hidden = false;
@@ -480,19 +485,20 @@
   };
 
   DeckListSearch.prototype.updateSummary = function () {
-    var summary = this.results.querySelector('[data-dls-summary]');
-    if (!summary) return;
     var count = 0;
     var total = 0;
     this.selection().forEach(function (i) { count += i.quantity; total += i.quantity * i.price; });
-    summary.textContent = count + (count > 1 ? ' cartes sélectionnées' : ' carte sélectionnée') +
+    var text = count + (count > 1 ? ' cartes sélectionnées' : ' carte sélectionnée') +
       ' · Total : ' + this.money.format(total / 100);
-    this.results.querySelector('[data-dls-add]').disabled = count === 0;
+    this.results.querySelectorAll('[data-dls-summary]').forEach(function (el) { el.textContent = text; });
+    this.results.querySelectorAll('[data-dls-add]').forEach(function (btn) { btn.disabled = count === 0; });
   };
 
   DeckListSearch.prototype.onResultsClick = function (event) {
     var addBtn = event.target.closest('[data-dls-add]');
     if (addBtn) return this.addToCart(addBtn);
+
+    if (event.target.closest('[data-dls-open-cart]')) return this.openCart();
 
     var copyBtn = event.target.closest('[data-dls-copy]');
     if (copyBtn && navigator.clipboard) {
@@ -502,37 +508,65 @@
     }
   };
 
-  DeckListSearch.prototype.addToCart = function (btn) {
-    var self = this;
-    var msg = this.results.querySelector('[data-dls-cart-msg]');
-    var items = this.selection().map(function (i) { return { id: i.id, quantity: i.quantity }; });
-    if (!items.length) return;
-
-    btn.disabled = true;
-    msg.classList.remove('dls__cart-msg--error');
-    msg.textContent = 'Ajout au panier…';
-
-    fetch(this.cartAddUrl, {
+  // Ajoute via les actions standard Shopify quand le thème les fournit (Horizon) :
+  // la pastille et le tiroir du panier se mettent alors à jour tout seuls.
+  // Sinon, repli sur l'API Ajax /cart/add.js.
+  DeckListSearch.prototype.postToCart = function (items) {
+    var actions = window.Shopify && window.Shopify.actions;
+    if (actions && actions.updateCart) {
+      return actions.updateCart(
+        { lines: items.map(function (i) { return { merchandiseId: String(i.id), quantity: i.quantity }; }) },
+        { event: { context: 'standard-action' } }
+      ).then(function (res) {
+        var errors = (res && res.userErrors) || [];
+        if (errors.length) throw new Error(errors.map(function (e) { return e.message; }).join(' '));
+        return res;
+      });
+    }
+    return fetch(this.cartAddUrl, {
       method: 'POST',
       credentials: 'same-origin',
       headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
       body: JSON.stringify({ items: items })
-    })
-      .then(function (r) {
-        return r.json().then(function (data) {
-          if (!r.ok) throw new Error(data.description || data.message || 'Erreur');
-          return data;
-        });
-      })
+    }).then(function (r) {
+      return r.json().then(function (data) {
+        if (!r.ok) throw new Error(data.description || data.message || 'Erreur');
+        return data;
+      });
+    });
+  };
+
+  DeckListSearch.prototype.openCart = function () {
+    var actions = window.Shopify && window.Shopify.actions;
+    if (actions && actions.openCart) actions.openCart();
+    else window.location.href = this.cartUrl;
+  };
+
+  DeckListSearch.prototype.addToCart = function (btn) {
+    var self = this;
+    var msgs = this.results.querySelectorAll('[data-dls-cart-msg]');
+    var buttons = this.results.querySelectorAll('[data-dls-add]');
+    var items = this.selection().map(function (i) { return { id: i.id, quantity: i.quantity }; });
+    if (!items.length) return;
+
+    function say(html, isError) {
+      msgs.forEach(function (m) {
+        m.classList.toggle('dls__cart-msg--error', !!isError);
+        m.innerHTML = html;
+      });
+    }
+
+    buttons.forEach(function (b) { b.disabled = true; });
+    say('Ajout au panier…');
+
+    this.postToCart(items)
       .then(function () {
-        msg.innerHTML = 'Cartes ajoutées au panier. <a href="' + esc(self.cartUrl) + '">Voir le panier</a>';
-        document.dispatchEvent(new CustomEvent('cart:refresh', { bubbles: true }));
+        say('Cartes ajoutées au panier. <button type="button" data-dls-open-cart>Voir le panier</button>');
       })
       .catch(function (err) {
-        msg.classList.add('dls__cart-msg--error');
-        msg.textContent = 'Impossible d’ajouter au panier : ' + err.message;
+        say(esc('Impossible d’ajouter au panier : ' + err.message), true);
       })
-      .then(function () { btn.disabled = false; });
+      .then(function () { self.updateSummary(); });
   };
 
   function init() {
