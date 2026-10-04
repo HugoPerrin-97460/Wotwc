@@ -89,3 +89,14 @@ test('ne réserve pas deux fois le même exemplaire', () => {
   assert.deepEqual([...dls.allocate(variants, 2, '', used)], [[1, 1]]);
   assert.deepEqual([...dls.allocate(variants, 1, '', used)], []);
 });
+
+test('résume une impression à partir du titre produit', () => {
+  assert.deepEqual(
+    dls.printingInfo('Frodo Sacquet - Le Seigneur des Anneaux : chroniques de la Terre du Milieu (Uncommon) [LTR-205]'),
+    { name: 'Frodo Sacquet', set: 'Le Seigneur des Anneaux : chroniques de la Terre du Milieu', code: 'LTR-205' }
+  );
+  assert.deepEqual(
+    dls.printingInfo('Cannibalisation - Forteresse (Common)'),
+    { name: 'Cannibalisation', set: 'Forteresse', code: '' }
+  );
+});

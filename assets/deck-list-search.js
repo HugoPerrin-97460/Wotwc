@@ -121,6 +121,19 @@
     return h || null;
   }
 
+  // « Frodo Sacquet - Le Seigneur des Anneaux (Uncommon) [LTR-205] » →
+  // { name: 'Frodo Sacquet', set: 'Le Seigneur des Anneaux', code: 'LTR-205' }
+  function printingInfo(title) {
+    var t = String(title);
+    var code = (t.match(/\[([^\]]+)\]\s*$/) || [])[1] || '';
+    var parts = t.split(/\s+[-–—|]\s+/);
+    var set = parts.slice(1).join(' - ')
+      .replace(/\[[^\]]*\]|\([^)]*\)/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
+    return { name: titleName(t), set: set, code: code };
+  }
+
   function productKeys(p) {
     var keys = new Set();
     var t = titleName(p.t);
@@ -208,6 +221,7 @@
     parseLine: parseLine,
     parseDeckList: parseDeckList,
     titleName: titleName,
+    printingInfo: printingInfo,
     handleName: handleName,
     buildIndex: buildIndex,
     findProducts: findProducts,
@@ -267,6 +281,13 @@
     this.form.addEventListener('submit', this.onSubmit.bind(this));
     root.querySelector('[data-dls-clear]').addEventListener('click', this.onClear.bind(this));
     this.results.addEventListener('input', this.updateSummary.bind(this));
+    this.results.addEventListener('change', function (event) {
+      var input = event.target.closest('[data-variant-id]');
+      if (!input) return;
+      var max = input.max === '' ? Infinity : Number(input.max);
+      input.value = Math.max(0, Math.min(max, parseInt(input.value, 10) || 0));
+      this.updateSummary();
+    }.bind(this));
     this.results.addEventListener('click', this.onResultsClick.bind(this));
   }
 
@@ -412,48 +433,29 @@
       else found.push({ card: r.card, rows: rows.sort(order), picks: picks, have: have });
     });
 
-    var summaryBar = function (extraClass) {
-      return '<div class="dls__summary' + extraClass + '">' +
-        '<p class="dls__summary-text" data-dls-summary></p>' +
-        '<button type="button" class="button" data-dls-add>Ajouter au panier</button>' +
-        '</div>' +
-        '<p class="dls__cart-msg" data-dls-cart-msg role="status" aria-live="polite"></p>';
-    };
-    var html = summaryBar('');
+    var html = '';
 
     if (found.length) {
       html += '<h3 class="dls__heading">Disponibles (' + found.length + ')</h3><ul class="dls__cards">';
       found.forEach(function (f) {
         var state = f.have >= f.card.qty ? 'ok' : 'partial';
+        var shown = f.rows.filter(function (x) { return f.picks.get(x.variant.id); });
+        var others = f.rows.filter(function (x) { return !f.picks.get(x.variant.id); });
+
         html += '<li class="dls__card dls__card--' + state + '">' +
           '<div class="dls__card-head">' +
           '<span class="dls__card-name">' + esc(f.card.qty) + ' × ' + esc(f.card.name) + '</span>' +
           '<span class="dls__badge">' + (state === 'ok' ? 'Complet' : f.have + ' / ' + f.card.qty) + '</span>' +
           '</div><ul class="dls__variants">';
-
-        f.rows.forEach(function (x) {
-          var v = x.variant;
-          var p = x.product;
-          var label = self.variantLabel(p, v);
-          var max = v.q != null && v.q >= 0 ? ' max="' + v.q + '"' : '';
-          var img = p.i
-            ? '<img src="' + esc(p.i) + '" alt="" width="48" height="67" loading="lazy">'
-            : '<span class="dls__noimg"></span>';
-          html += '<li class="dls__variant' + (v.a ? '' : ' dls__variant--soldout') + '">' +
-            img +
-            '<a class="dls__variant-title" href="' + esc(self.productsUrl + p.h) + '?variant=' + esc(v.id) +
-            '" target="_blank" rel="noopener">' + esc(label) + '</a>' +
-            '<span class="dls__price">' + esc(self.money.format(v.p / 100)) + '</span>' +
-            '<span class="dls__stock">' + esc(self.stockLabel(v)) + '</span>' +
-            (v.a
-              ? '<input class="dls__qty" type="number" inputmode="numeric" min="0"' + max +
-                ' value="' + (f.picks.get(v.id) || 0) + '" data-variant-id="' + esc(v.id) +
-                '" data-price="' + esc(v.p) + '" aria-label="Quantité pour ' + esc(label) + '">'
-              : '<span class="dls__qty dls__qty--none">—</span>') +
-            '</li>';
-        });
-
-        html += '</ul></li>';
+        shown.forEach(function (x) { html += self.variantRow(x, f.picks, false); });
+        others.forEach(function (x) { html += self.variantRow(x, f.picks, true); });
+        html += '</ul>';
+        if (others.length) {
+          var moreLabel = 'Voir ' + others.length + (others.length > 1 ? ' autres exemplaires' : ' autre exemplaire');
+          html += '<button type="button" class="dls__more" data-dls-more aria-expanded="false" data-label="' +
+            esc(moreLabel) + '">' + esc(moreLabel) + '</button>';
+        }
+        html += '</li>';
       });
       html += '</ul>';
     }
@@ -464,15 +466,62 @@
         '<ul class="dls__missing">' +
         missing.map(function (r) { return '<li>' + esc(r.card.qty) + ' × ' + esc(r.card.name) + '</li>'; }).join('') +
         '</ul>' +
-        '<button type="button" class="button-secondary" data-dls-copy="' + esc(missingText) + '">Copier la liste des cartes manquantes</button>';
+        '<button type="button" class="button-secondary dls__copy" data-dls-copy="' + esc(missingText) + '">Copier la liste des cartes manquantes</button>';
     }
 
-    if (found.length) html += summaryBar(' dls__summary--bottom');
+    // Barre collée en bas de l'écran tant que les résultats sont visibles.
+    if (found.length) {
+      html += '<div class="dls__summary">' +
+        '<div class="dls__summary-main">' +
+        '<p class="dls__summary-text" data-dls-summary></p>' +
+        '<button type="button" class="button" data-dls-add>Ajouter au panier</button>' +
+        '</div>' +
+        '<p class="dls__cart-msg" data-dls-cart-msg role="status" aria-live="polite"></p>' +
+        '</div>';
+    }
 
     this.results.innerHTML = html;
     this.results.hidden = false;
-    this.setStatus(found.length + ' cartes trouvées sur ' + results.length + '.');
+    this.setStatus(found.length + (found.length > 1 ? ' cartes trouvées' : ' carte trouvée') + ' sur ' + results.length + '.');
     this.updateSummary();
+    // Sur mobile, les résultats sont sous le formulaire : on les amène à l'écran.
+    if (this.status.scrollIntoView) this.status.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  };
+
+  DeckListSearch.prototype.variantRow = function (x, picks, extra) {
+    var v = x.variant;
+    var p = x.product;
+    var info = printingInfo(p.t);
+    var details = [info.code].concat(v.t && v.t !== 'Default Title' ? v.t.split(/\s*\/\s*/) : [])
+      .filter(Boolean).join(' · ');
+    var max = v.q != null && v.q >= 0 ? v.q : '';
+    var qty = picks.get(v.id) || 0;
+    var label = this.variantLabel(p, v);
+    var img = p.i
+      ? '<img src="' + esc(p.i) + '" alt="" width="40" height="56" loading="lazy">'
+      : '<span class="dls__noimg"></span>';
+
+    return '<li class="dls__variant' + (v.a ? '' : ' dls__variant--soldout') + '"' + (extra ? ' data-dls-extra hidden' : '') + '>' +
+      img +
+      '<div class="dls__variant-info">' +
+      '<a class="dls__variant-title" href="' + esc(this.productsUrl + p.h) + '?variant=' + esc(v.id) +
+      '" target="_blank" rel="noopener" title="' + esc(label) + '">' +
+      esc(info.name) + (info.set ? ' <span class="dls__set">— ' + esc(info.set) + '</span>' : '') + '</a>' +
+      (details ? '<span class="dls__details">' + esc(details) + '</span>' : '') +
+      '<span class="dls__price-line"><span class="dls__price">' + esc(this.money.format(v.p / 100)) + '</span> ' +
+      '<span class="dls__stock">' + esc(this.stockLabel(v)) + '</span></span>' +
+      '</div>' +
+      (v.a
+        ? '<div class="dls__stepper">' +
+          '<button type="button" class="dls__step" data-dls-step="-1" aria-label="Retirer un exemplaire">−</button>' +
+          '<input class="dls__qty" type="number" inputmode="numeric" pattern="[0-9]*" min="0"' +
+          (max !== '' ? ' max="' + max + '"' : '') +
+          ' value="' + qty + '" data-variant-id="' + esc(v.id) + '" data-price="' + esc(v.p) + '"' +
+          ' aria-label="Quantité pour ' + esc(label) + '">' +
+          '<button type="button" class="dls__step" data-dls-step="1" aria-label="Ajouter un exemplaire">+</button>' +
+          '</div>'
+        : '<span class="dls__soldout">Épuisé</span>') +
+      '</li>';
   };
 
   DeckListSearch.prototype.selection = function () {
@@ -488,8 +537,7 @@
     var count = 0;
     var total = 0;
     this.selection().forEach(function (i) { count += i.quantity; total += i.quantity * i.price; });
-    var text = count + (count > 1 ? ' cartes sélectionnées' : ' carte sélectionnée') +
-      ' · Total : ' + this.money.format(total / 100);
+    var text = count + (count > 1 ? ' cartes' : ' carte') + ' · ' + this.money.format(total / 100);
     this.results.querySelectorAll('[data-dls-summary]').forEach(function (el) { el.textContent = text; });
     this.results.querySelectorAll('[data-dls-add]').forEach(function (btn) { btn.disabled = count === 0; });
   };
@@ -499,6 +547,24 @@
     if (addBtn) return this.addToCart(addBtn);
 
     if (event.target.closest('[data-dls-open-cart]')) return this.openCart();
+
+    var step = event.target.closest('[data-dls-step]');
+    if (step) {
+      var input = step.parentNode.querySelector('[data-variant-id]');
+      var max = input.max === '' ? Infinity : Number(input.max);
+      var next = (parseInt(input.value, 10) || 0) + Number(step.dataset.dlsStep);
+      input.value = Math.max(0, Math.min(max, next));
+      return this.updateSummary();
+    }
+
+    var more = event.target.closest('[data-dls-more]');
+    if (more) {
+      var open = more.getAttribute('aria-expanded') !== 'true';
+      more.closest('.dls__card').querySelectorAll('[data-dls-extra]').forEach(function (li) { li.hidden = !open; });
+      more.setAttribute('aria-expanded', String(open));
+      more.textContent = open ? 'Masquer les autres exemplaires' : more.dataset.label;
+      return;
+    }
 
     var copyBtn = event.target.closest('[data-dls-copy]');
     if (copyBtn && navigator.clipboard) {

@@ -38,13 +38,16 @@ puis gardé 10 minutes dans le navigateur : les recherches suivantes sont instan
 
 ### Installation sur la boutique
 
-La section est installée sur la copie de thème **« Horizon – Recherche par liste »** (non publiée),
-dans le modèle de collection, entre le titre et la grille de produits. Elle n'apparaît que sur
-la collection « Cartes à l'unité » (`magic-single`, réglage « N'afficher que sur cette collection »)
-et cherche dans cette même collection.
+La section est en ligne dans le thème **« Horizon – Recherche par liste »**, dans le modèle de
+collection, entre le titre et la grille de produits. Elle n'apparaît que sur la collection
+« Cartes à l'unité » (`magic-single`, réglage « N'afficher que sur cette collection ») et
+cherche dans cette même collection.
 
-- Aperçu : `https://wizardsofthewestcoast.com/collections/magic-single?preview_theme_id=189146628415`
-- Pour la mettre en ligne : **Boutique en ligne → Thèmes → « Horizon – Recherche par liste » → Publier**.
+La version optimisée pour mobile (résultats compacts, boutons − / +, barre panier collée en bas,
+champs en 16 px contre le zoom d'iOS) est sur la copie **« Horizon – Recherche par liste (mobile) »** :
+
+- Aperçu : `https://wizardsofthewestcoast.com/collections/magic-single?preview_theme_id=189213442367`
+- Pour la mettre en ligne : **Boutique en ligne → Thèmes → « Horizon – Recherche par liste (mobile) » → Publier**.
 
 Le panier passe par les actions standard Shopify du thème Horizon (`Shopify.actions.updateCart`) :
 la pastille et le tiroir du panier se mettent à jour automatiquement. Sur un autre thème, le
