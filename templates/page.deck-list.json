@@ -1,0 +1,9 @@
+{
+  "sections": {
+    "main": {
+      "type": "deck-list-search",
+      "settings": {}
+    }
+  },
+  "order": ["main"]
+}

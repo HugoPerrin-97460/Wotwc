@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Recherche par liste (démo)</title>
+  <style>
+    /* Imitation minimale du thème Horizon (variables, .section, boutons) */
+    :root { --color-foreground-rgb: 18 18 18; --color-background: #fff; --page-margin: 16px; }
+    body { margin: 0; font: 16px/1.4 system-ui, sans-serif; color: rgb(var(--color-foreground-rgb)); background: var(--color-background); }
+    .section { display: grid; grid-template-columns: minmax(16px, 1fr) min(1200px, calc(100% - 32px)) minmax(16px, 1fr); }
+    .section > * { grid-column: 2; }
+    .h4 { font-size: 1.25rem; font-weight: 700; }
+    .button, .button-secondary { padding: 0.75rem 1.5rem; font: inherit; border-radius: 6px; cursor: pointer; }
+    .button { border: 0; background: #121212; color: #fff; }
+    .button-secondary { border: 1px solid #121212; background: #fff; color: #121212; }
+    .button:disabled { opacity: 0.5; cursor: default; }
+  </style>
+  <link rel="stylesheet" href="/assets/deck-list-search.css">
+  <script src="/assets/deck-list-search.js" defer></script>
+</head>
+<body>
+  <!-- Reproduit le rendu de sections/deck-list-search.liquid -->
+  <div class="section section--page-width" style="padding-block: 24px 32px;">
+    <div class="dls" data-dls data-catalog-url="/collections/all" data-products-url="/products/"
+         data-cart-add-url="/cart/add" data-cart-url="/cart" data-currency="EUR" data-locale="fr"
+         data-loose="false" data-show-stock="true">
+      <details class="dls__panel" open>
+        <summary class="dls__panel-summary">
+          <span class="dls__title h4">Recherche par liste</span>
+          <span class="dls__intro">Colle ta liste de deck : on te montre les cartes disponibles et tu peux tout ajouter au panier en un clic.</span>
+        </summary>
+        <form class="dls__form" data-dls-form novalidate autocomplete="off">
+          <label class="dls__label" for="dls-input">Ta liste de cartes (une par ligne)</label>
+          <textarea id="dls-input" class="dls__textarea" data-dls-input rows="8" spellcheck="false" autocomplete="off" autocorrect="off" autocapitalize="off"
+            placeholder="2 Chaos Warp&#10;1 Thalia's Lancers"></textarea>
+          <p class="dls__hint">Noms en anglais ou en français.</p>
+          <div class="dls__options">
+            <label for="dls-lang">Langue préférée</label>
+            <select id="dls-lang" class="dls__select" data-dls-lang>
+              <option value="">Peu importe (le moins cher)</option>
+              <option value="francais">Français</option>
+              <option value="anglais">Anglais</option>
+            </select>
+          </div>
+          <div class="dls__actions">
+            <button type="submit" class="button" data-dls-submit>Rechercher</button>
+            <button type="button" class="button-secondary" data-dls-clear>Effacer</button>
+          </div>
+        </form>
+        <p class="dls__status" data-dls-status role="status" aria-live="polite"></p>
+        <div class="dls__results" data-dls-results hidden></div>
+      </details>
+    </div>
+  </div>
+</body>
+</html>

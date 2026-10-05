@@ -1,0 +1,23 @@
+{%- comment -%}
+  Vue JSON compacte du catalogue, utilisée par la section « Recherche par liste ».
+  Appel : /collections/all?view=deck&page=1
+  h = handle, t = titre, i = image, g = tags
+  v = variantes : id, t = titre, p = prix (centimes), a = dispo, q = stock (null si non suivi)
+{%- endcomment -%}
+{%- layout none -%}
+{%- paginate collection.products by 250 -%}
+{"pages":{{ paginate.pages }},"products":[
+{%- for p in collection.products -%}
+{"h":{{ p.handle | json }},"t":{{ p.title | json }},
+"i":{% if p.featured_image %}{{ p.featured_image | image_url: width: 120 | json }}{% else %}null{% endif %},
+"g":{{ p.tags | json }},
+"v":[
+{%- for v in p.variants -%}
+{"id":{{ v.id }},"t":{{ v.title | json }},"p":{{ v.price }},"a":{{ v.available }},"q":{% if v.inventory_management == 'shopify' and v.inventory_policy == 'deny' %}{{ v.inventory_quantity }}{% else %}null{% endif %}}
+{%- unless forloop.last -%},{%- endunless -%}
+{%- endfor -%}
+]}
+{%- unless forloop.last -%},{%- endunless -%}
+{%- endfor -%}
+]}
+{%- endpaginate -%}
