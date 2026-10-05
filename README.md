@@ -44,10 +44,10 @@ collection, entre le titre et la grille de produits. Elle n'apparaît que sur la
 cherche dans cette même collection.
 
 La version optimisée pour mobile (résultats compacts, boutons − / +, barre panier collée en bas,
-champs en 16 px contre le zoom d'iOS) est sur la copie **« Horizon – Recherche par liste (mobile) »** :
+champs en 16 px contre le zoom d'iOS) est sur la copie **« Horizon – Recherche par liste (chevron) »** :
 
-- Aperçu : `https://wizardsofthewestcoast.com/collections/magic-single?preview_theme_id=189213442367`
-- Pour la mettre en ligne : **Boutique en ligne → Thèmes → « Horizon – Recherche par liste (mobile) » → Publier**.
+- Aperçu : `https://wizardsofthewestcoast.com/collections/magic-single?preview_theme_id=189238444351`
+- Pour la mettre en ligne : **Boutique en ligne → Thèmes → « Horizon – Recherche par liste (chevron) » → Publier**.
 
 Le panier passe par les actions standard Shopify du thème Horizon (`Shopify.actions.updateCart`) :
 la pastille et le tiroir du panier se mettent à jour automatiquement. Sur un autre thème, le
