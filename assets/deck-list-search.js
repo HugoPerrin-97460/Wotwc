@@ -236,7 +236,8 @@
 
   /* ---------- Interface ---------- */
 
-  var LIST_KEY = 'deck-list-search:last';
+  // Ancienne clé : la liste collée était gardée d'une visite à l'autre. On l'efface.
+  var OLD_LIST_KEY = 'deck-list-search:last';
   var CACHE_TTL = 10 * 60 * 1000;
   var CONCURRENCY = 4;
 
@@ -275,8 +276,18 @@
     this.money = new Intl.NumberFormat(d.locale || 'fr', { style: 'currency', currency: d.currency || 'EUR' });
     this.catalog = null;
 
-    var saved = store('localStorage', LIST_KEY);
-    if (saved && !this.textarea.value) this.textarea.value = saved;
+    store('localStorage', OLD_LIST_KEY, null);
+    this.textarea.value = '';
+
+    // Retour sur la page via « Précédent » : le navigateur peut restaurer la page telle
+    // quelle (cache) ou remettre le texte dans le champ. On repart d'un formulaire vide,
+    // sauf si le visiteur a déjà commencé à taper pendant le chargement.
+    var typed = false;
+    this.textarea.addEventListener('input', function () { typed = true; });
+    window.addEventListener('pageshow', function (event) {
+      if (event.persisted) this.reset();
+      else if (!typed) this.textarea.value = '';
+    }.bind(this));
 
     this.form.addEventListener('submit', this.onSubmit.bind(this));
     root.querySelector('[data-dls-clear]').addEventListener('click', this.onClear.bind(this));
@@ -296,12 +307,15 @@
     this.status.classList.toggle('dls__status--error', !!isError);
   };
 
-  DeckListSearch.prototype.onClear = function () {
+  DeckListSearch.prototype.reset = function () {
     this.textarea.value = '';
     this.results.hidden = true;
     this.results.innerHTML = '';
     this.setStatus('');
-    store('localStorage', LIST_KEY, null);
+  };
+
+  DeckListSearch.prototype.onClear = function () {
+    this.reset();
     this.textarea.focus();
   };
 
@@ -378,7 +392,6 @@
       this.setStatus('Colle ta liste de cartes, une carte par ligne.', true);
       return;
     }
-    store('localStorage', LIST_KEY, this.textarea.value);
 
     this.submitBtn.disabled = true;
     this.loadCatalog()
